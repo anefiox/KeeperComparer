@@ -1,0 +1,6 @@
+@KeeperComparer_HostAddress = http://localhost:5073
+
+GET {{KeeperComparer_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

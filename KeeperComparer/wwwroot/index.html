@@ -1,0 +1,253 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Keeper Records</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1600px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+
+        h1, h2 {
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        a {
+            color: #007bff;
+            text-decoration: none;
+        }
+
+            a:hover {
+                text-decoration: underline;
+            }
+
+        .dashboard {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            margin-bottom: 20px;
+            align-items: flex-start;
+        }
+
+        .summary {
+            flex: 1;
+            min-width: 350px;
+        }
+
+        .key {
+            flex: 1;
+            min-width: 250px;
+        }
+
+        .summary, .key {
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background-color: #f9f9f9;
+        }
+
+        .summary-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+            .summary-item:last-child {
+                border-bottom: none;
+            }
+
+            .summary-item span:last-child {
+                font-weight: bold;
+            }
+
+        .key-item {
+            padding: 4px 0;
+        }
+
+        .key-color {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 1px solid #ccc;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        .records-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            table-layout: fixed;
+        }
+            .records-table th, .records-table td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: left;
+                word-wrap: break-word;
+            }
+
+            .records-table th {
+                background-color: #f2f2f2;
+            }
+
+            .records-table tbody tr:hover {
+                background-color: #f5f5f5;
+                cursor: pointer;
+            }
+
+        .pagination {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+            .pagination button {
+                padding: 8px 16px;
+                cursor: pointer;
+                margin: 0 5px;
+            }
+
+                .pagination button:disabled {
+                    cursor: not-allowed;
+                    color: #999;
+                }
+
+        .status-ExactMatch {
+            background-color: #d4edda;
+        }
+
+        .status-SimilarMatch {
+            background-color: #fff3cd;
+        }
+
+        .status-Mismatch {
+            background-color: #f8d7da;
+        }
+
+        .status-OneIsEmpty, .status-BothEmpty {
+            background-color: #e2e3e5;
+        }
+
+        .status-NoMatch {
+            background-color: #f8d7da;
+        }
+    </style>
+</head>
+<body>
+    <h1>Records Dashboard</h1>
+
+    <div class="dashboard">
+        <div class="summary">
+            <h2>Data Quality Summary</h2>
+            <div id="summary-content"></div>
+        </div>
+        <div class="key">
+            <h2>Colour Key</h2>
+            <div class="key-item"><span class="key-color status-ExactMatch"></span> Exact Match</div>
+            <div class="key-item"><span class="key-color status-SimilarMatch"></span> Similar Data</div>
+            <div class="key-item"><span class="key-color status-Mismatch"></span> Mismatched Data</div>
+            <div class="key-item"><span class="key-color status-OneIsEmpty"></span> Missing Data</div>
+        </div>
+    </div>
+
+    <h2>All Records (Source A)</h2>
+    <p>Click a row to see the full side-by-side comparison.</p>
+
+    <table class="records-table">
+        <thead>
+            <tr>
+                <th style="width: 5%;">ID</th>
+                <th style="width: 15%;">Full Name</th>
+                <th style="width: 18%;">Email Address</th>
+                <th style="width: 10%;">Date of Birth</th>
+                <th style="width: 12%;">Mobile Number</th>
+                <th style="width: 12%;">Landline Number</th>
+                <th style="width: 20%;">Address</th>
+            </tr>
+        </thead>
+        <tbody id="records-body"></tbody>
+    </table>
+
+    <div class="pagination">
+        <button id="prevBtn">Previous</button>
+        <span id="pageInfo"></span>
+        <button id="nextBtn">Next</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const recordsBody = document.getElementById('records-body');
+            const summaryContent = document.getElementById('summary-content');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const pageInfo = document.getElementById('pageInfo');
+
+            let currentPage = 1;
+            const pageSize = 10;
+            let totalRecords = 0;
+
+            async function fetchRecords(page) {
+                const response = await fetch(`/api/records?page=${page}&pageSize=${pageSize}`);
+                if (!response.ok) { return; }
+                const result = await response.json();
+
+                const summary = result.summary;
+                summaryContent.innerHTML = `
+                        <div class="summary-item"><span>Strong / Exact Matches</span><span>${summary.strongMatches}</span></div>
+                        <div class="summary-item"><span>Mismatches / No Match</span><span>${summary.mismatches}</span></div>
+                    `;
+
+                const pagination = result.pagination;
+                totalRecords = pagination.totalRecords;
+                currentPage = pagination.currentPage;
+                updatePagination();
+
+                recordsBody.innerHTML = '';
+                result.records.forEach(item => {
+                    const record = item.record;
+                    const statuses = item.fieldStatuses;
+
+                    const row = document.createElement('tr');
+                    row.onclick = () => { window.location.href = `/comparison.html?id=${record.id}`; };
+
+                    row.innerHTML = `
+                            <td class="status-${statuses['Id'] || 'ExactMatch'}">${record.id}</td>
+                            <td class="status-${statuses['FullName'] || 'ExactMatch'}">${record.fullName}</td>
+                            <td class="status-${statuses['EmailAddress'] || 'ExactMatch'}">${record.emailAddress}</td>
+                            <td class="status-${statuses['DateofBirth'] || 'ExactMatch'}">${new Date(record.dateOfBirth).toLocaleDateString()}</td>
+                            <td class="status-${statuses['MobileNumber'] || 'ExactMatch'}">${record.mobileNumber || ''}</td>
+                            <td class="status-${statuses['LandlineNumber'] || 'ExactMatch'}">${record.landlineNumber || ''}</td>
+                            <td class="status-${statuses['AddressLine1'] || statuses['City'] || statuses['Postcode'] || 'ExactMatch'}">${formatAddress(record.address)}</td>
+                        `;
+                    recordsBody.appendChild(row);
+                });
+            }
+
+            function formatAddress(address) {
+                if (!address) return '';
+                const parts = [address.line1, address.city, address.postcode];
+                return parts.filter(p => p).join(', '); 
+            }
+
+            function updatePagination() {
+                const totalPages = Math.ceil(totalRecords / pageSize);
+                pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+                prevBtn.disabled = currentPage <= 1;
+                nextBtn.disabled = currentPage >= totalPages;
+            }
+
+            prevBtn.addEventListener('click', () => { if (currentPage > 1) fetchRecords(currentPage - 1); });
+            nextBtn.addEventListener('click', () => { const totalPages = Math.ceil(totalRecords / pageSize); if (currentPage < totalPages) fetchRecords(currentPage + 1); });
+
+            fetchRecords(currentPage);
+        });
+    </script>
+</body>
+</html>
